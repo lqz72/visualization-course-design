@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>成都地铁各线路流量占比</title>
+    <script src="./static/js/jquery.min.js"></script>
+    <script src="./static/js/echarts.min.js"></script>
+    <script src="./static/js/bmap.min.js"></script>
+    <script src="./static/js/map-config.js"></script>
+    <script src="./static/js/station-info.js"></script>
+    <script src="./static/js/station.js"></script>
+    <script src="./static/js/link.js"></script>
+    <script src="./static/js/line-flow.js"></script>
+    <script type="text/javascript" src="http://api.map.baidu.com/api?v=2.0&ak=kTGd0qSyeknX5tHwFmXtC9KHb33FTDpW"></script>
+    
+    <style type="text/css"> 
+        html{height:100%} 
+        body{height:100%;margin:0px;padding:0px} 
+        #map{width:100%; height:100%}
+        .anchorBL{
+            display:none;
+        }
+        .BMap_cpyCtrl {
+            display:none;
+        }
+    </style> 
+
+    <script type="text/javascript">
+        // 导入线路图和客流数据
+        var styleJson = bg;
+        var staData = stationJson;
+        var linkData = linkJson;
+        var lineFlowData = lineFlowJson;
+        var click = true;
+
+        // 获取所有站点对象
+        function getNodes(size=50, solid=true){
+            var res = [];
+            for(let index in staData){
+                sta_info = staData[index]
+
+                let myItemStyle = sta_info['itemStyle']
+                if(solid == false) {
+                    myItemStyle = {
+                        borderColor: myItemStyle['normal']['color'],
+                        color: 'white',
+                        opacity: 0.05
+                    }
+                }
+                res.push({
+                    name: sta_info['name'],
+                    value: [sta_info['x'], sta_info['y'], size],
+                    category: sta_info['category'],
+                    itemStyle: myItemStyle,
+                });
+            }
+            return res;
+        }
+
+        // 获取所有link对象
+        function getLinks(width=6, colorMap=null){
+            var res = [];
+            for(let index in linkData){
+                link_info = linkData[index];
+
+                let myColor;
+                if(colorMap)
+                    myColor = colorMap[link_info['dataGroupId']];
+                else
+                    myColor = link_info['lineStyle']['color'];
+                
+                res.push({
+                    name: link_info['name'],
+                    coords: link_info['coords'],
+                    lineStyle: {
+                        width: 4,
+                        color: myColor,
+                        opacity: 0.7,
+                        curveness: 0.02,
+                    },
+                    dataGroupId: link_info['dataGroupId'],
+                });
+            }
+            return res;
+        }
+        
+        // 根据日期索引获取饼图数据
+        function getPieData(index){
+            temp = lineFlowData[index]
+            let pieData = [];
+            for(let line in temp){
+                if(line == '日期'){
+                    continue;
+                }
+                pieData.push({
+                    name: line,
+                    value: temp[line]
+                })
+            }
+            return pieData;
+        }
+
+        // 获取线路客流并映射到对应颜色
+        function changeLinksColor(index){
+            temp = lineFlowData[index]
+            let colorMap = {};
+            for(let line in temp){
+                if(line == '日期'){
+                    continue;
+                }
+                // 获取该条线路的颜色
+                lineColor = flowMapColor(temp[line]);
+                colorMap[line.split('号')[0]] = lineColor;
+            }
+            return getLinks(6, colorMap);
+        }
+
+        // 颜色映射函数
+        function flowMapColor(flow){
+            if(flow >= 0 && flow < 20){
+               return '#23c768';
+            }
+            else if(flow >= 20 && flow < 40){
+                return '#99ff4d';
+            }
+            else if(flow >= 40 && flow < 60){
+                return'#FDD56A';
+            }
+            else if(flow >= 60 && flow < 80){
+                return '#ff7e00';
+            }
+            else{
+                return '#fe0000';
+            }
+        }
+        
+        // 所有线路的名称
+        var lineNames = [];
+        for(let i = 0; i < staData.length; i++){
+            if(lineNames.indexOf(staData[i].category) == -1){
+                lineNames.push(staData[i].category)
+            }
+        }
+
+        // 三月份所有日期
+        var dayList = [];
+        for(let i = 1; i <= 31; i+=1)
+            dayList.push(`3月${i}日`);
+
+        // 饼图数据 各线路月平均客流
+        var pieData = [{
+                name: "1号线",
+                value: "73.20484"
+            },
+            {
+                name: "2号线",
+                value: "65.30194"
+            },
+            {
+                name: "3号线",
+                value: "65.21968"
+            },
+            {
+                name: "4号线",
+                value: "57.34871"
+            },
+            {
+                name: "5号线",
+                value: "50.42032"
+            },
+            {
+                name: "6号线",
+                value: "46.83581"
+            },
+            {
+                name: "7号线",
+                value: "64.42774"
+            },
+            {
+                name: "8号线",
+                value: "28.43419"
+            },
+            {
+                name: "9号线",
+                value: "25.24452"
+            },
+            {
+                name: "10号线",
+                value: "8.783871"
+            },
+            {
+                name: "17号线",
+                value: "5.458065"
+            },
+            {
+                name: "18号线",
+                value: "13.40452"
+            }
+        ];
+        
+        // 热力图视觉编码
+        var myVisualMap = {
+            min: 0,
+            max: 100,
+            seriesIndex:1,
+            calculable: true,
+            text: ['High', 'Low'],
+            inRange: {
+                color: ['#23c768', '#FDD56A', '#fe0000']
+            },
+            padding: 5,
+            left: "4%",
+            bottom: "11%",
+            orient: 'vertical',
+            textStyle: {
+                color: '#808A87'
+            }
+        }
+
+        // 切换线路图和热力图
+        function switchMap() {
+            console.log(click); 
+            if(click){
+                let dayOption = [];
+
+                for(let i in dayList){
+                    let temp = JSON.parse(JSON.stringify(mapOption.series));
+
+                    temp[0].data = getNodes(25, false);
+                    for(let index in lineLabel){
+                        temp[0].data.push(lineLabel[index])
+                    }
+
+                    temp[1].data = changeLinksColor(i);
+                    temp[2].data = getPieData(i);
+                    
+                    dayOption.push({ 
+                        series: temp
+                    })
+                }
+                changeOption(dayOption, 1);
+            }
+            else{
+                changeOption();
+            }
+            click = !click;
+        }  
+
+        // 折线图
+        var lineOption =  {
+            title: {
+                text: "地铁线网总客流量变化",
+                left: "center",
+            },
+            color: ['#5B8FF9', '#FFA18E', '#5AD8A6'],
+			tooltip: {
+				trigger: 'axis',
+				formatter: function(param){
+					return `${param[0].name}: ${param[0].data}万人`;
+				}
+			},
+            xAxis: {
+                type: 'category',
+                data: dayList,
+                
+            },
+            yAxis: {
+                type: 'value',
+            },
+            legend: {
+                icon: 'circle',
+                top: '10%',
+                right: 'center',
+                itemWidth: 6,
+                itemGap: 20,
+                textStyle: {
+                    color: '#556677'
+                }
+            },
+            series: [{
+                name: '3月',
+                type: 'line', 
+                smooth: true, 
+                showSymbol: false,
+                data: allLineFlow
+            }]
+        };
+
+        // 地铁线路图及饼图
+        var mapOption = {
+            title: [
+                {
+                    text: '成都地铁路线可视化',
+                    subtext: 'made by fyf',
+                    left: 'center',
+                    textStyle: {
+                        color: 'black',
+                        fontSize: 30
+                    },
+                    subtextStyle: {
+                        color: '#999',
+                        fontSize: 14
+                    }
+                }
+            ],
+            timeline: {
+                orient: 'horizontal',
+                axisType: 'category',
+                show: true,
+                autoPlay: false,
+                playInterval: 1000,
+                symbolSize: 10,
+                itemStyle:{
+                    opacity:0
+                },
+                data: dayList
+            },
+            legend: [{
+                data: lineNames,
+                right: 5,
+                top: 30,
+                orient: 'vertical'
+            }],
+            tooltip: {
+                trigger: 'item',
+                formatter: function (params, ticket, callback) {
+                    return params.name ;
+                }
+            },
+            toolbox: {
+                show : true,
+                left: '30',
+                top: '10',
+                feature : {
+                    mark : {show: true},
+                    dataView : {show: true, readOnly: false},
+                    restore : {show: true},
+                    myButtons:{
+                        show: true,
+                        title: '切换热力图',  
+                        icon: 'path://M432.45,595.444c0,2.177-4.661,6.82-11.305,6.82c-6.475,0-11.306-4.567-11.306-6.82s4.852-6.812,11.306-6.812C427.841,588.632,432.452,593.191,432.45,595.444L432.45,595.444z M421.155,589.876c-3.009,0-5.448,2.495-5.448,5.572s2.439,5.572,5.448,5.572c3.01,0,5.449-2.495,5.449-5.572C426.604,592.371,424.165,589.876,421.155,589.876L421.155,589.876z M421.146,591.891c-1.916,0-3.47,1.589-3.47,3.549c0,1.959,1.554,3.548,3.47,3.548s3.469-1.589,3.469-3.548C424.614,593.479,423.062,591.891,421.146,591.891L421.146,591.891zM421.146,591.891', 
+                        onclick: switchMap
+                    },
+                    saveAsImage : {show: true}
+                }
+            },
+            bmap: {
+                center: [104.17, 30.673],
+                zoom: 12,
+                roam: true,
+                mapStyle: {
+                    styleJson: styleJson,
+                }
+            },
+            series: [
+                {
+                    name: 'station',
+                    type: 'scatter',
+                    coordinateSystem: 'bmap',
+                    data: getNodes(),
+                    symbolSize: function(val){
+                        return val[2]/ 5;
+                    },
+                    tooltip: {
+                        formatter: function(param){
+                            if(param.name.substring(0, 2) != '地铁')
+                                return `地铁${param.data.category}: ${param.name}`;
+                            return param.name;
+                        }
+                    },
+                    label: {
+                        normal: {
+                            formatter: '{b}',
+                            position: 'right',
+                            show: false
+                        },
+                        emphasis: {
+                            show: true
+                        }
+                    },
+                },
+                {
+                    name: 'link',
+                    type: 'lines',
+                    coordinateSystem: 'bmap',
+                    tooltip: {
+                        formatter: function(param){
+                            return `地铁${param.data.dataGroupId}号线: ${param.name}`;
+                        }
+                    },
+                    data: getLinks(),
+                },
+                {
+                    name: '线路流量占比',
+                    title:{
+                        text: '线路流量占比',
+                        textStyle: {
+                            color: 'black',
+                            fontSize: 26
+                        },
+                    },
+                    tooltip:{
+                        formatter: function(param){
+                            console.log(param)
+                            return `${param.data.name}: ${param.data.value}万人 `;
+                        }
+                    },
+                    type: 'pie',
+                    radius: ['18%', '34%'],
+                    center: ["80%", "20%"],
+                    avoidLabelOverlap: true,
+                    top: 10,
+                    right: 10,
+                    color: [
+                        '#52A8FF',
+                        '#00B389',
+                        '#E27272',
+                        '#FFC53D',
+                        '#006EFE',
+                        '#F5855F',
+                        '#C099FC',
+                        '#FFA940',
+                        '#29EFC4',
+                        '#F8AEA4',
+                    ],
+                    data: pieData
+                },
+            ],
+            options: []
+        };
+        
+        // 更新图表
+        function changeOption(options=null, type=0){
+            if(type == 0){
+                mapOption.series[0].data = getNodes();
+                mapOption.series[1].data = getLinks();
+                mapOption.options = [];
+                mapOption.visualMap = [];
+            }
+            else{
+                mapOption.series[0].data = []
+                mapOption.series[1].data = []
+                mapOption.options = options;
+                mapOption.visualMap = myVisualMap;
+            }
+            initChart();
+        }
+
+        // 初始化图表
+        function initChart(type=0) {
+            var mapChart = echarts.init(document.getElementById('map'));
+      
+            for(let index in lineLabel)
+                mapOption.series[0].data.push(lineLabel[index])
+
+            mapChart.clear()
+            mapChart.setOption(mapOption);
+            console.log(mapOption)
+
+            var lineChart = echarts.init(document.getElementById('line'))
+            lineChart.setOption(lineOption);
+        
+            mapChart.on('click',function(obj){
+                console.log(obj)
+                mapChart.setOption(mapOption);
+            });
+        }
+        
+        $(document).ready(initChart); 
+    </script>
+</head>
+ 
+<body align=center>
+    <div id="map" style="z-index:950"> </div>
+    <div id="line" style="width: 30%;height:45%;right:40px;bottom:40px;position:absolute;z-index:950"></div>
+</body>
+    
+</html>

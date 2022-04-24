@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <script type="text/javascript" src="./static/js/echarts.min.js"></script>
+    <script type="text/javascript" src="./static/js/sunburst-data.js"></script>
+    <style>
+        .sunburst{
+            width: 1000px;
+            height: 720px;
+            margin: auto;
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="sunburst" id="sunburst" ></div>
+</body>
+
+<script>
+    console.log(JSON.parse(JSON.stringify(jsonData)));
+
+    // 旭日图配置项
+    var option = {
+        timeline: {
+            data: ['2017', '2018', '2019', '2020', '2021'],
+            autoPlay: false,
+            playInterval: 1000,
+        },
+        legend:{},
+        tooltip:{
+            trigger: 'item',
+            formatter: function (param) {
+                if(param.componentType == 'timeline')
+                    return;
+
+                var label = "";
+                var selfName = param.data.name;
+                var selfValue = Math.round(param.data.value, 2);
+                
+                var treePath = param.treePathInfo;
+                
+                
+                var table = {'PIG': '猪肉', 'BEEF': '牛肉', 'SHEEP': '羊肉', 'POULTRY': '家禽'};
+                if(treePath.length >= 4){
+                    selfName = selfName + `(${table[selfName]})`;
+                }
+                if(treePath.length <= 1){
+                    return `全球消费量：${selfValue} 公斤/人`;
+                }
+                
+                var father = treePath[treePath.length-2];
+                var percent = Math.round(param.data.value / father.value * 100, 2);
+                
+                label = `${selfName}<br/>${selfValue} 公斤/人 (${percent}%)`;
+                return label;
+            }
+        },
+        series: 
+        {
+            type: 'sunburst',
+            data: [],
+            highlightPolicy: 'descendant',
+            radius: [ 0, '70%'],
+            sort: null,
+            levels: [{
+                r0: '0%',
+                r: '15%',
+                itemStyle: {
+                    color: 'white'
+                },
+                label: {
+                    rotate: 'tangential'
+                },
+            }, {
+                r0: '15%',
+                r: '35%',
+                itemStyle: {
+                    borderWidth: 3,
+                },
+                label: {
+                    rotate: 'tangential'
+                },
+
+            }, {
+                r0: '36%',
+                r: '66%',            
+                label: {
+                    align: 'center',                
+                },
+
+            }, {
+                r0: '67%',
+                r: '69%',
+                label: {
+                    position: 'outside',
+                    padding: 3,
+                    silent: false
+                },
+                itemStyle: {
+                    borderWidth: 3
+                },
+            }]
+        },
+        options:[],
+    };
+    
+    // 父结点颜色  绿 红 黄 蓝 棕
+    var parColor = ['#187a2f', '#da1d23', '#f7a128', '#0aa3b5', '#be8663' ]
+    // 子结点颜色
+    var sonColor = [
+        ['#228B22', '#00CC00', '#7FFF00', '#ADFF2F', '#00FA9A', '#00FF7F', '#4EEE94', '#B4EEB4', ],
+        ['#CC3333', '#cc3d41', '#dd4c51', '#FF6666', '#FF9999', ],
+        ['#f7a128', '#FF9933', '#FFCC00', '#FFFF00', '#FFFF66', '#FFFF99'],
+        ['#76c0cb', '#99CCCC'],
+        [ '#caa465', '#ddaf61']
+    ];
+    // 最外层结点颜色
+    var color = [
+        '#FDB36A',
+        '#FD866A',
+        '#73DDFF',
+        '#4AEAB0'
+    ];
+
+    sunburst = echarts.init(document.getElementById("sunburst"));
+
+    // 获取旭日图数据并显示图表
+    if(jsonData != null){
+        for(let year in jsonData){
+            var yearOption = {
+                title:{
+                    text: year + '年全球部分国家肉类消费量',
+                    textStyle: {
+                        color: 'black',
+                        fontSize: 20,
+                        align: 'center', 
+                    },
+                    x: 'center',
+                },
+                series: {
+                    data: [],
+                },
+            };
+
+            var yearData = jsonData[year];
+            var seriesData = [];
+            var i = 0;
+            for(let area in  yearData){
+                let areaOption = {
+                    name: area,
+                    children: [],
+                    itemStyle:{
+                        color: parColor[i]
+                    }
+                }
+                
+                var areaData = yearData[area];
+                var j = 0;
+                for(let counrty in areaData){
+                    let countryOption = {
+                        name: counrty,
+                        children: [],
+                        itemStyle:{
+                            color: sonColor[i][j]
+                        }
+                    }
+
+                    var countryData = areaData[counrty];
+                    var k = 0;
+                    for(let meat in countryData){
+                        if(meat == 'sum')
+                            continue;
+                        countryOption.children.push({
+                            name: meat,
+                            value: countryData[meat],
+                            label:{
+                                fontSize: 12,
+                                fontWeight: 'blod'
+                            },
+                            itemStyle:{
+                                color:color[k++]
+                            }
+                        })
+                    }
+                    areaOption.children.push(countryOption);
+                    j++;
+                }
+                seriesData.push(areaOption);
+                i++;
+            }
+            yearOption.series.data = seriesData;
+            option.options.push(yearOption);
+        }
+        console.log(option);
+        sunburst.setOption(option);
+    }
+</script>
+
+
